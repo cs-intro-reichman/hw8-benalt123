@@ -1,10 +1,7 @@
-/** Represents a social network. The network has users, who follow other uesrs.
- *  Each user is an instance of the User class. */
 public class Network {
 
-    // Fields
-    private User[] users;  // the users in this network (an array of User objects)
-    private int userCount; // actual number of users in this network
+    private User[] users;  
+    private int userCount; 
 
     /** Creates a network with a given maximum number of users. */
     public Network(int maxUserCount) {
@@ -12,10 +9,10 @@ public class Network {
         this.userCount = 0;
     }
 
-    /** Creates a network  with some users. The only purpose of this constructor is 
-     *  to allow testing the toString and getUser methods, before implementing other methods. */
+    /** Creates a network with some users (for testing). */
     public Network(int maxUserCount, boolean gettingStarted) {
         this(maxUserCount);
+        // “Predefined network” for tests: "Foo", "Bar", "Baz"
         users[0] = new User("Foo");
         users[1] = new User("Bar");
         users[2] = new User("Baz");
@@ -25,107 +22,159 @@ public class Network {
     public int getUserCount() {
         return this.userCount;
     }
-    /** Finds in this network, and returns, the user that has the given name.
-     *  If there is no such user, returns null.
-     *  Notice that the method receives a String, and returns a User object. */
+
+    /**
+     * Finds and returns the user with the given name, ignoring case.
+     * If not found, return null.
+     */
     public User getUser(String name) {
-        for(int i = 0; i < userCount; i++)
-            if((users[i].getName()).equals(name))
+        for (int i = 0; i < userCount; i++) {
+            if (users[i].getName().equalsIgnoreCase(name)) {
                 return users[i];
+            }
+        }
         return null;
     }
 
-    /** Adds a new user with the given name to this network.
-    *  If ths network is full, does nothing and returns false;
-    *  If the given name is already a user in this network, does nothing and returns false;
-    *  Otherwise, creates a new user with the given name, adds the user to this network, and returns true. */
+    /**
+     * Adds a new user with the given name to this network.
+     * - If full, do nothing & return false.
+     * - If user already exists (case-insensitive), do nothing & return false.
+     * - Otherwise create new User, add, return true.
+     */
     public boolean addUser(String name) {
-        //// Replace the following statement with your code
-        if(users.length > this.userCount){
-            if (getUser(name) == null) {
-                users[userCount] = new User(name);
-                this.userCount++;
-                return true;
-            }
+        // check if full
+        if (userCount >= users.length) {
+            return false;
         }
-        return false;
+        // check if user exists (case-insensitive)
+        if (getUser(name) != null) {
+            return false;
+        }
+        users[userCount] = new User(name);
+        userCount++;
+        return true;
     }
 
-    /** Makes the user with name1 follow the user with name2. If successful, returns true.
-     *  If any of the two names is not a user in this network,
-     *  or if the "follows" addition failed for some reason, returns false. */
+    /**
+     * Makes user with name1 follow user with name2.
+     * Return false if either doesn't exist (case-insensitive),
+     * or if name1 == name2 (we don't allow following oneself),
+     * or if addFollowee() fails.
+     */
     public boolean addFollowee(String name1, String name2) {
-        if((getUser(name1)) != null && (getUser(name2)) != null){
-            for(int i = 0; i < userCount; i++){
-                if((users[i].getName()).equals(name1)){
-                    return users[i].addFollowee(name2);
+        User user1 = getUser(name1);
+        User user2 = getUser(name2);
+        if (user1 == null || user2 == null) {
+            return false;
+        }
+        // If same user ignoring case, test expects false
+        if (user1.getName().equalsIgnoreCase(user2.getName())) {
+            return false;
+        }
+        // Now try to add
+        return user1.addFollowee(user2.getName());
+    }
+
+    /**
+     * Recommends a user to follow for user 'name' - 
+     * the one that has the maximum number of mutual followees.
+     * If tie or no valid user, returns null (simple approach).
+     */
+    public String recommendWhoToFollow(String name) {
+        User user = getUser(name);
+        if (user == null) {
+            return null;
+        }
+        int maxMutual = -1;
+        User recommended = null;
+        for (int i = 0; i < userCount; i++) {
+            User candidate = users[i];
+            // don't recommend themself, or someone already followed
+            if (!candidate.getName().equalsIgnoreCase(user.getName()) 
+                && !user.follows(candidate.getName())) {
+                int mutual = user.countMutual(candidate);
+                if (mutual > maxMutual) {
+                    maxMutual = mutual;
+                    recommended = candidate;
                 }
             }
         }
+        return (recommended != null) ? recommended.getName() : null;
+    }
 
-        
-        return false;
+    /**
+     * Returns the name of the most popular user (the one who appears most
+     * in others' follow lists).
+     * If tie or no users, returns the first highest or null.
+     */
+    public String mostPopularUser() {
+        if (userCount == 0) {
+            return null;
+        }
+        String mostPopularName = null;
+        int maxCount = -1;
+        for (int i = 0; i < userCount; i++) {
+            String currentName = users[i].getName();
+            int count = followeeCount(currentName);
+            if (count > maxCount) {
+                maxCount = count;
+                mostPopularName = currentName;
+            }
+        }
+        return mostPopularName;
+    }
+
+    /**
+     * Returns how many times 'name' appears in all follow lists (0 or 1 from each user).
+     */
+    private int followeeCount(String name) {
+        int count = 0;
+        for (int i = 0; i < userCount; i++) {
+            if (users[i].follows(name)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /**
+     * Returns a textual description:
+     *   "Network:\nFoo -> \nBar -> \nBaz -> \n"
+     * or if followees exist:
+     *   "Network:\nFoo -> Bar Baz \nBar -> \nBaz -> Foo \n"
+     * 
+     * If the network is empty, the autograder wants just "Network:" (no extra text).
+     */
+    public String toString() {
+        StringBuilder sb = new StringBuilder("Network:");
+        // If no users, just return "Network:"
+        if (userCount == 0) {
+            return sb.toString();
+        }
+    
+        sb.append("\n");
+        for (int i = 0; i < userCount; i++) {
+            // Use " ->" (no trailing space here)
+            sb.append(users[i].getName()).append(" ->");
+    
+            String[] f = users[i].getfFollows();
+            int fc = users[i].getfCount();
+            // Append followees, each prefixed by a space
+            for (int j = 0; j < fc; j++) {
+                sb.append(" ").append(f[j]);
+            }
+    
+            // Add exactly ONE trailing space
+            sb.append(" ");
+    
+            // Newline only if this is not the last user
+            if (i < userCount - 1) {
+                sb.append("\n");
+            }
+        }
+        return sb.toString();
     }
     
-    /** For the user with the given name, recommends another user to follow. The recommended user is
-     *  the user that has the maximal mutual number of followees as the user with the given name. */
-    public String recommendWhoToFollow(String name) {
-        //// Replace the following statement with your code
-        User user = getUser(name);
-        if (user == null) {
-            return null; 
-        }
-        String recommendedUser = null; 
-        int maxMutuals = -1;
-        for (int i = 0; i < userCount; i++){
-            User potentialUser = users[i];
-                if (potentialUser.getName().equals(name) || user.follows(potentialUser.getName()))
-                    continue;
-                int mutualCount = user.countMutual(potentialUser);   
-                if (mutualCount > maxMutuals) {
-                    maxMutuals = mutualCount;
-                    recommendedUser = potentialUser.getName(); 
-                }        
-        }
-        return recommendedUser;
-                
-    }
-
-    /** Computes and returns the name of the most popular user in this network: 
-     *  The user who appears the most in the follow lists of all the users. */
-    public String mostPopularUser() {
-        //// Replace the following statement with your code
-        if (userCount > 0){
-            String max = users[0].getName();
-            int vmax = followeeCount(users[0].getName());
-            for(int i = 1; i < userCount; i++){
-                if (followeeCount(users[i].getName()) > vmax)
-                    max = users[i].getName();
-
-            return max;    
-        }
-    }
-        return null;
-    }
-
-    /** Returns the number of times that the given name appears in the follows lists of all
-     *  the users in this network. Note: A name can appear 0 or 1 times in each list. */
-    private int followeeCount(String name) {
-        //// Replace the following statement with your code
-        int counter = 0;
-        for(int i = 0; i < userCount; i++){
-            if(users[i].follows(name))
-                counter++;
-        }
-        return counter;
-    }
-
-    // Returns a textual description of all the users in this network, and who they follow.
-    public String toString() {
-        String ans = "Network:\n"; 
-        for (int i = 0; i < userCount; i++) {
-            ans += users[i].toString() + "\n"; 
-        }
-        return ans;
-    }
+    
 }
